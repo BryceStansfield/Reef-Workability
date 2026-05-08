@@ -83,10 +83,13 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
 
     train_data, test_data = train_test_split(combined_df, test_size=0.25, stratify=combined_df["visit_status"])
 
+    SUCCESSFUL_DIVE_CLASS = 0
+    FAILED_DIVE_CLASS = 1
+
     X_train = train_data[features]
-    y_train = (train_data['visit_status'] == 'Successful').astype(int)
+    y_train = (train_data['visit_status'] != 'Successful').astype(int)
     X_test = test_data[features]
-    y_test = (test_data['visit_status'] == 'Successful').astype(int)
+    y_test = (test_data['visit_status'] != 'Successful').astype(int)
 
     if len(X_train) == 0 or len(np.unique(y_train)) < 2:
         print("Error: Insufficient training data")
@@ -96,12 +99,12 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
     test_class_counts = pd.Series(y_test).value_counts()
 
     print(f"\nTraining set class distribution:")
-    print(f"Failed visits (0): {train_class_counts.get(0, 0)} ({train_class_counts.get(0, 0) / len(y_train) * 100:.1f}%)")
-    print(f"Successful visits (1): {train_class_counts.get(1, 0)} ({train_class_counts.get(1, 0) / len(y_train) * 100:.1f}%)")
+    print(f"Failed visits ({FAILED_DIVE_CLASS}): {train_class_counts.get(FAILED_DIVE_CLASS, 0)} ({train_class_counts.get(FAILED_DIVE_CLASS, 0) / len(y_train) * 100:.1f}%)")
+    print(f"Successful visits ({SUCCESSFUL_DIVE_CLASS}): {train_class_counts.get(SUCCESSFUL_DIVE_CLASS, 0)} ({train_class_counts.get(SUCCESSFUL_DIVE_CLASS, 0) / len(y_train) * 100:.1f}%)")
 
     model_params = {
         "RandomForest": {
-            'classifier__n_estimators': [10, 20, 50, 100, 200, 500, 1000],
+            'classifier__n_estimators': [1000],     # There's no need to try a small number of trees, since random forest performance should only ever improve with additional trees.
             'classifier__max_depth': [None, 1, 2, 5, 10, 20],
             'classifier__min_samples_split': [2, 3, 5],
             'classifier__min_samples_leaf': [1, 2, 4]
@@ -116,7 +119,7 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
             'classifier__kernel': ['rbf', 'sigmoid']
         },
         "XGBoost": {
-            'classifier__n_estimators': [10, 20, 50, 100, 200, 500],
+            'classifier__n_estimators': [10, 20, 50, 100, 200, 500],    # XGBoost can overfit with too many trees.
             'classifier__max_depth': [2,3,4,5],
             'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
             'classifier__subsample': [0.8, 0.9, 1.0],
@@ -125,19 +128,19 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
         }
     }
 
-    if strategy != "oversampling":
+    if strategy == "weighted":
         for model in model_params:
             if model != "XGBoost":
-                model_params[model]["classifier__class_weight"] = ['balanced', {0: 3, 1: 1}, {0: 5, 1: 1}, {0: 10, 1: 1}]
+                model_params[model]["classifier__class_weight"] = [{FAILED_DIVE_CLASS: sum(y_train == SUCCESSFUL_DIVE_CLASS), SUCCESSFUL_DIVE_CLASS: sum(y_train == FAILED_DIVE_CLASS)}]
             else:
                 model_params[model]['classifier__scale_pos_weight'] = [1, (len(y_train) - sum(y_train))/sum(y_train)]
 
     # The lambda allows us to reconstruct the model with the optimal parametres found during the grid search for threshold optimization.
     models = {
-        'RandomForest': lambda x: RandomForestClassifier(random_state=42, **x),
-        'LogisticRegression': lambda x: LogisticRegression(random_state=42, max_iter=10000, **x),
-        'SVM': lambda x: SVC(probability=True, random_state=42, **x),
-        'XGBoost': lambda x: xgb.XGBClassifier(random_state=42, eval_metric='logloss', **x)
+        'RandomForest': RandomForestClassifier(random_state=42),
+        'LogisticRegression': LogisticRegression(random_state=42, max_iter=10000),
+        'SVM': SVC(probability=True, random_state=42),
+        'XGBoost': xgb.XGBClassifier(random_state=42, eval_metric='logloss')
     }
 
     best_model = None
@@ -149,31 +152,33 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
     print(f"MODEL EVALUATION RESULTS - {strategy.upper()} STRATEGY")
     print(f"{'=' * 80}")
 
-    for model_name, model in models.items():
-        print(f"\nTraining {model_name} with {strategy}...")
-
+    def model_to_pipeline(model_name):
         if strategy == 'oversampling':
             if model_name in ['SVM', 'LogisticRegression']:
-                pipeline = Pipeline([
+                return Pipeline([
                     ('sampler', SMOTE(random_state=42)),
                     ('scaler', StandardScaler()),
-                    ('classifier', model({})),
+                    ('classifier', models[model_name]),
                 ])
             else:
-                pipeline = Pipeline([
+                return Pipeline([
                     ('sampler', SMOTE(random_state=42)),
-                    ('classifier', model({}))
+                    ('classifier', models[model_name])
                 ])
         else:
             if model_name in ['SVM', 'LogisticRegression']:
-                pipeline = Pipeline([
+                return Pipeline([
                     ('scaler', StandardScaler()),
-                    ('classifier', model({}))
+                    ('classifier', models[model_name])
                 ])
             else:
-                pipeline = Pipeline([
-                    ('classifier', model({}))
+                return Pipeline([
+                    ('classifier', models[model_name])
                 ])
+
+    for model_name, model in models.items():
+        print(f"\nTraining {model_name} with {strategy}...")
+        pipeline = model_to_pipeline(model_name)
 
         rs = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
         search = GridSearchCV(
@@ -189,17 +194,25 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
             search.fit(X_train, y_train)
             
             # Now, let's refit *again* and optimize the thresholds.
+            optimal_params = search.best_params_
+            """threshold_search = TunedThresholdClassifierCV(
+                estimator=search.best_estimator_,
+                cv="prefit",
+                scoring='f1',
+                n_jobs=-1,
+                refit=False
+            )
+            threshold_search.fit(X_train, y_train)"""
 
-
-            y_pred = search.best_estimator_.predict(X_test)
+            y_pred = search.predict(X_test)
 
             accuracy = accuracy_score(y_test, y_pred)
-            precision_successful = precision_score(y_test, y_pred, pos_label=1, zero_division=0)
-            recall_successful = recall_score(y_test, y_pred, pos_label=1, zero_division=0)
-            precision_failed = precision_score(y_test, y_pred, pos_label=0, zero_division=0)
-            recall_failed = recall_score(y_test, y_pred, pos_label=0, zero_division=0)
-            f1_failed = f1_score(y_test, y_pred, pos_label=0, zero_division=0)
-            f1_successful = f1_score(y_test, y_pred, pos_label=1, zero_division=0)
+            precision_successful = precision_score(y_test, y_pred, pos_label=SUCCESSFUL_DIVE_CLASS, zero_division=0)
+            recall_successful = recall_score(y_test, y_pred, pos_label=SUCCESSFUL_DIVE_CLASS, zero_division=0)
+            precision_failed = precision_score(y_test, y_pred, pos_label=FAILED_DIVE_CLASS, zero_division=0)
+            recall_failed = recall_score(y_test, y_pred, pos_label=FAILED_DIVE_CLASS, zero_division=0)
+            f1_failed = f1_score(y_test, y_pred, pos_label=FAILED_DIVE_CLASS, zero_division=0)
+            f1_successful = f1_score(y_test, y_pred, pos_label=SUCCESSFUL_DIVE_CLASS, zero_division=0)
 
             result = {
                 'model_name': model_name,
@@ -230,7 +243,7 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
 
             print(f"\nClassification Report for {model_name}:")
             print(classification_report(y_test, y_pred,
-                                        target_names=['Failed', 'Successful'],
+                                        target_names=['Failed', 'Successful'] if SUCCESSFUL_DIVE_CLASS == 1 else ['Successful', 'Failed'],
                                         digits=4))
             print("-" * 60)
 
@@ -255,7 +268,8 @@ def train_and_evaluate_models(combined_df, strategy='oversampling'):
         'Recall (Success)': r['recall_successful'],
         'Precision (Failed)': r['precision_failed'],
         'Recall (Failed)': r['recall_failed'],
-        'F1 (Failed)': r['f1_failed']
+        'F1 (Failed)': r['f1_failed'],
+        'F1 (Successful)': r['f1_successful']
     } for r in model_results])
 
     print(f"\nBest Model: {best_model_name}")
@@ -292,6 +306,10 @@ def main(data_directory: pathlib.Path):
 
     print(f"Combined dataset created with {len(combined_df)} entries.")
     print(f"Date range: {combined_df['date'].min()} to {combined_df['date'].max()}")
+
+    print("\n" + "=" * 80)
+    print("TRAINING MODELS WITH NO ADJUSTMENT STRATEGY")
+    model_none_info = train_and_evaluate_models(combined_df, strategy='none')
 
     print("\n" + "=" * 80)
     print("TRAINING MODELS WITH OVERSAMPLING STRATEGY")
