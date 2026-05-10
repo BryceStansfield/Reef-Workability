@@ -15,19 +15,24 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         nopp_milestone.touch()
 
     # Then we download WHACS data.
-    """     print("Starting WHACS download, this may take a long while...")
+    print("Starting WHACS download, this may take a long while...")
     whacs_milestone = download_folder / "meta" / "whacs_download_complete.txt"
     if not whacs_milestone.exists():
         year_months = [(year, month) for year in range(2020, 2024) for month in range(1, 13)]
-        download_whacs_files(year_months, download_folder / "whacs", max_workers=1)    # For whatever reason, in my experience the WHACs data downloads at very low bitrates when done simultaneously.
+        download_whacs_files(year_months, download_folder / "whacs", max_workers=3)    # For whatever reason, in my experience the WHACs data downloads at very low bitrates when done simultaneously.
         whacs_milestone.parent.mkdir(parents=True, exist_ok=True)
-        whacs_milestone.touch() """
+        whacs_milestone.touch()
 
     # Now, we merge the coordinates from our surveyData and our COTS data.
     merge_reef_datasets(download_folder / 'surveyData[63].csv',
-    download_folder / 'COTS INLOC Weather impacts.xlsx',
-    download_folder / 'COTS INLOC Weather impacts-WithCoor.xlsx'
+        download_folder / 'COTS INLOC Weather impacts.xlsx',
+        download_folder / 'COTS INLOC Weather impacts-WithCoordinates.xlsx'
     )
+
+    # Finally, let's add wind wave data to the SurveyData.
+    
+
+
 
 if __name__ == "__main__":
     download_and_process_all_data()

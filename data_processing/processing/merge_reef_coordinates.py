@@ -37,12 +37,31 @@ def normalize_reef_name(name):
 
 # Where there are multiple potential matches, we manually choose.
 # TODO: Review these, check resonably central.
+# TODO 2: Consider replacing with some sort of xy dataset.
 MULTI_MATCH_DICT = {
     "fitzroy island": "fitzroy island 16-054a",
     "kelso": "kelso 18-030",
     "little lizard": "lizard island 14-116a",
     "lizard island": "lizard island 14-116a",
-    "mackay": "mackay 16-015"
+    "mackay": "mackay 16-015",
+
+    # TODO: Really check these.
+    "big broadhurst no1": "broadhurst 18-100a",
+    "big broadhurst no2": "broadhurst 18-100a",
+    "big broadhurst no3": "broadhurst 18-100a",
+    "big broadhurst no4": "broadhurst 18-100a",
+
+    "michaelmas 16-062": "michaelmas 16-060",
+
+    "ribbon no3": "ribbon 14-146 10",
+    "ribbon no4": "ribbon 14-146 10",
+    "round russel": "round-russell 17-013",
+    "startle 15-028": "startle reefs 15-028",
+    "flynn 16-071": "flynn 16-065",
+
+    "u/n 15-071c": "u/n 10-299",
+
+    "round russell": "round-russell 17-013",
 }
 
 def manual_multiple_match_reconcilliation(name):
@@ -81,6 +100,7 @@ def get_best_match(name, lookup_dict):
 def merge_reef_datasets(locations_file, vessel_file, output_file=None):
     locations_df = pd.read_csv(locations_file)
     vessel_df = pd.read_excel(vessel_file)
+    vessel_df = vessel_df[vessel_df["Reason"] == "Strong wind and swell conditions"]
 
     print(f"Loaded locations dataset with {len(locations_df)} rows")
     print(f"Loaded vessel dataset with {len(vessel_df)} rows")
@@ -122,16 +142,11 @@ def merge_reef_datasets(locations_file, vessel_file, output_file=None):
     matched_count = vessel_df['x'].notna().sum()
     print(f"\nSuccessfully matched coordinates for {matched_count} out of {len(vessel_df)} entries "
           f"({matched_count / len(vessel_df) * 100:.1f}%)")
-
-    print("\nSample of successful matches:")
-    successful_matches = vessel_df[vessel_df['x'].notna()].head(10)
-    for _, row in successful_matches.iterrows():
-        print(f"'{row['Reef']}' matched with '{row['matched_with']}'")
-
+    
     if matched_count < len(vessel_df):
         unmatched = vessel_df[vessel_df['x'].isna()]
-        print(f"\nSample of unmatched reefs (up to 10):")
-        for _, row in unmatched.head(10).iterrows():
+        print(f"Unmatched reefs:")
+        for _, row in unmatched.iterrows():
             print(f"'{row['Reef']}' (normalized: '{row['normalized_name']}') - No match found")
 
             if row['normalized_name']:
