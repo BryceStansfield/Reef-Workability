@@ -17,7 +17,7 @@ def merge_visit_dfs(visit_dfs: list[pd.DataFrame], names: list[str], was_success
     merged_df['month'] = merged_df['date'].dt.month
     merged_df['year'] = merged_df['date'].dt.year
     merged_df['quarter'] = merged_df['date'].dt.quarter
-    merged_df['wind_magnitude'] = np.sqrt(merged_df['u_wind']**2 + merged_df['v_wind']**2)
+    merged_df['wind_magnitude'] = np.hypot(merged_df['u_wind'], merged_df['v_wind'])
 
     merged_df_nas_dropped = merged_df.dropna(subset=['wave_height', 'u_wind', 'v_wind'])
 

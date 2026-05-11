@@ -30,19 +30,19 @@ class ModelAndCalibrationCurve:
 
     def __repr__(self) -> str:
         return f"ModelAndCalibrationCurve(model_name={self.model_name}"
+    
+MODEL_FEATURES = ['wave_height', 'u_wind', 'v_wind', 'wind_magnitude', 'month']
 
 def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.Path):
     # We aim to train calibrated probability models, then evaluate them by their Brier Skill Scores.
-    features = ['wave_height', 'u_wind', 'v_wind', 'wind_magnitude', 'month']
-
     train_data, test_data = train_test_split(combined_df, test_size=0.25, stratify=combined_df["was_successful"], random_state=42)
 
     SUCCESSFUL_DIVE_CLASS = 1
     FAILED_DIVE_CLASS = 0
 
-    X_train = train_data[features]
+    X_train = train_data[MODEL_FEATURES]
     y_train = (train_data['was_successful']).astype(int)
-    X_test = test_data[features]
+    X_test = test_data[MODEL_FEATURES]
     y_test = (test_data['was_successful']).astype(int)
 
     if len(X_train) == 0 or len(np.unique(y_train)) < 2:
@@ -147,7 +147,7 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
             best_model_name = model_name
     
     # Retraining our best model on the full dataset.
-    best_model = train_model_with_name(best_model_name, combined_df[features], combined_df['was_successful'].astype(int))
+    best_model = train_model_with_name(best_model_name, combined_df[MODEL_FEATURES], combined_df['was_successful'].astype(int))
     print(f"Saving best model: {best_model}, with Testing Brier Skill Score: {best_brier_skill_score:.8f}, into {model_save_path}")
 
     # Quick sanity test

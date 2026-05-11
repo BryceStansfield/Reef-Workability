@@ -5,6 +5,8 @@ from data_processing.extraction.extract_whacs_for_visits import construct_csvs_w
 from data_processing.processing.merge_visit_dfs import merge_visit_dfs
 import pandas as pd
 from models.model_training import train_and_evaluate_probability_models
+from data_processing.extraction.extract_historical_whacs_for_centroids import extract_historical_whacs_for_centroids
+from data_processing.processing.predict_reef_date_success_probabilities import predict_success_prob_for_reef_visits
 
 import pathlib
 
@@ -41,7 +43,27 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
     merged_df.to_csv(download_folder / "combined_visits_with_weather.csv", index=False)
 
     # Training our models.
-    train_and_evaluate_probability_models(merged_df, pathlib.Path(__file__).parent / "Data" / "best_model.pickle")
+    best_model_path = download_folder / "best_model.pickle"
+    train_and_evaluate_probability_models(merged_df, best_model_path)
 
+    # Now, let's do the setup for batch workability prediction.
+    centroid_whacs_path = download_folder / "centroid_historical_whacs.csv"
+
+    if centroid_whacs_path.exists():
+        print(f"Loading cached historical WHACS data from {centroid_whacs_path}")
+        historical_centroid_weather_data = pd.read_csv(centroid_whacs_path)
+    else:
+        print("Extracting historical WHACS data for centroids, this may take a long while...")
+        historical_centroid_weather_data = extract_historical_whacs_for_centroids(
+            centroids_path=pathlib.Path(__file__).parent / "Data" / "ReefCentroids.txt",
+            whacs_base_path=download_folder / "whacs"
+        )
+        historical_centroid_weather_data.to_csv(centroid_whacs_path, index=False)
+    
+    # Predict workability for each centroid-month combination, using the best model.
+    print("Predicting workability for each centroid-month combination, this also may take a long while...")
+    predicted_workability = predict_success_prob_for_reef_visits(best_model_path, historical_centroid_weather_data)
+    predicted_workability.to_csv(download_folder / "predicted_workability_for_centroids.csv", index=False)
+    
 if __name__ == "__main__":
     download_and_process_all_data()
