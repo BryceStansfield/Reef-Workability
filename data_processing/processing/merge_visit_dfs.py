@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 def merge_visit_dfs(visit_dfs: list[pd.DataFrame], names: list[str], was_successful: list[bool]) -> pd.DataFrame:
     if len(visit_dfs) != len(names):
@@ -12,4 +13,15 @@ def merge_visit_dfs(visit_dfs: list[pd.DataFrame], names: list[str], was_success
         df['was_successful'] = success
     
     merged_df = pd.concat(visit_dfs, ignore_index=True)
-    return merged_df
+    
+    merged_df['month'] = merged_df['date'].dt.month
+    merged_df['year'] = merged_df['date'].dt.year
+    merged_df['quarter'] = merged_df['date'].dt.quarter
+    merged_df['wind_magnitude'] = np.sqrt(merged_df['u_wind']**2 + merged_df['v_wind']**2)
+
+    merged_df_nas_dropped = merged_df.dropna(subset=['wave_height', 'u_wind', 'v_wind'])
+
+    if len(merged_df_nas_dropped) < len(merged_df):
+        print(f"Warning: Dropping {len(merged_df) - len(merged_df_nas_dropped)} rows due to missing weather data.")
+
+    return merged_df_nas_dropped

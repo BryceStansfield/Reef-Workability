@@ -10,3 +10,5 @@ meta
 *.xlsx
 whacs/*
 whacs
+combined_visits_with_weather.csv
+best_calibrated_model.pkl
