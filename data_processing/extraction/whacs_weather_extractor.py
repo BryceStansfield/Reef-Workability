@@ -38,17 +38,14 @@ class WhacsWeatherExtractor:
 
                 lon = ds.longitude.values
                 lat = ds.latitude.values
-                lon_grid, lat_grid = np.meshgrid(lon, lat)
-                grid_points = np.column_stack((lon_grid.ravel(), lat_grid.ravel()))
 
                 self.grid_cache[cache_key] = {
-                    'lon_grid': lon_grid,
-                    'lat_grid': lat_grid,
+                    'lat_len': len(lat),
+                    'lon_len': len(lon),
                     'min_lon': lon[0],
                     'min_lat': lat[0],
                     'lat_delta': lat[1] - lat[0],
-                    'lon_delta': lon[1] - lon[0],
-                    'grid_points': grid_points
+                    'lon_delta': lon[1] - lon[0]
                 }
 
             except Exception as e:
@@ -81,17 +78,24 @@ class WhacsWeatherExtractor:
 
             results = []
             for lon, lat in coords_array:
-                try:
-                    # Find the closest grid point
-                    closest_i = int(np.round((lat - grid_info['min_lat']) / grid_info['lat_delta']))
-                    closest_j = int(np.round((lon - grid_info['min_lon']) / grid_info['lon_delta']))
+                closest_i = int(np.round((lat - grid_info['min_lat']) / grid_info['lat_delta']))
+                closest_j = int(np.round((lon - grid_info['min_lon']) / grid_info['lon_delta']))
+                for d_j, d_i in [(0, 0), (0, 1), (0, -1), (1, 0), (-1, 0)]:
+                    adj_i = closest_i + d_i
+                    adj_j = closest_j + d_j
+
+                    if adj_i < 0 or adj_i >= grid_info['lat_len'] or adj_j < 0 or adj_j >= grid_info['lon_len']:
+                        continue
 
                     mean_value = ds_subset[param_name].isel(
-                        latitude=closest_i, longitude=closest_j
+                        latitude=adj_i, longitude=adj_j
                     ).mean().item()
-                    results.append(mean_value)
-                except:
-                    results.append(np.nan)
+
+                    if not np.isnan(mean_value) or d_j == -1:
+                        results.append(mean_value)
+                        break
+                    else:
+                        continue
 
             return np.array(results)
 
