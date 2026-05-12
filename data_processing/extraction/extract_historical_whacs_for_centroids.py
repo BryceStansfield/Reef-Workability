@@ -18,11 +18,12 @@ def extract_historical_whacs_for_centroids_in_month(centroids: list[tuple[float,
     rows = []
 
     while cur_date.month == target_month_start.month:
+        wave_heights = extractor.extract_batch_daytime_hours_mean_by_parameter("hs", cur_date, np.array(centroids))
+        u_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("uwnd", cur_date, np.array(centroids))
+        v_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("vwnd", cur_date, np.array(centroids))
+
         for i in range(len(centroids)):
             x, y = centroids[i]
-            wave_height = extractor.extract_batch_daytime_hours_mean_by_parameter("hs", cur_date, np.array([[x, y]]))[0]
-            u_wind = extractor.extract_batch_daytime_hours_mean_by_parameter("uwnd", cur_date, np.array([[x, y]]))[0]
-            v_wind = extractor.extract_batch_daytime_hours_mean_by_parameter("vwnd", cur_date, np.array([[x, y]]))[0]
 
             rows.append({
                 "centroid_index": i,
@@ -30,10 +31,10 @@ def extract_historical_whacs_for_centroids_in_month(centroids: list[tuple[float,
                 "y": y,
                 "x": x,
                 "datetime": cur_date,
-                "wave_height": wave_height,
-                "u_wind": u_wind,
-                "v_wind": v_wind,
-                "wind_magnitude": np.hypot(u_wind, v_wind)
+                "wave_height": wave_heights[i],
+                "u_wind": u_winds[i],
+                "v_wind": v_winds[i],
+                "wind_magnitude": np.hypot(u_winds[i], v_winds[i])
             })
 
         cur_date += timedelta(days=1)

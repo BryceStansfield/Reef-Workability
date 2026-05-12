@@ -8,7 +8,6 @@ class WhacsWeatherExtractor:
         self.data_base_path = pathlib.Path(data_base_path)
 
         self.dataset_cache = {}
-        self.kdtree_cache = {}
         self.grid_cache = {}
 
     def get_nc_file_path(self, parameter, date):
@@ -45,10 +44,12 @@ class WhacsWeatherExtractor:
                 self.grid_cache[cache_key] = {
                     'lon_grid': lon_grid,
                     'lat_grid': lat_grid,
+                    'min_lon': lon[0],
+                    'min_lat': lat[0],
+                    'lat_delta': lat[1] - lat[0],
+                    'lon_delta': lon[1] - lon[0],
                     'grid_points': grid_points
                 }
-
-                self.kdtree_cache[cache_key] = KDTree(grid_points)
 
             except Exception as e:
                 print(f"Error loading dataset {nc_file_path}: {e}")
@@ -63,7 +64,7 @@ class WhacsWeatherExtractor:
     def extract_batch_daytime_hours_mean(self, nc_file_path, date, coords_array, param_name):
         ds = self.load_and_cache_dataset(nc_file_path)
         if ds is None:
-            return np.full(len(coords_array), np.nan)
+            raise Exception(f"Could not find or load dataset for parameter {param_name} and date {date.strftime('%Y-%m-%d')}")
 
         try:
             date_str = date.strftime('%Y-%m-%d')
@@ -76,15 +77,15 @@ class WhacsWeatherExtractor:
                 return np.full(len(coords_array), np.nan)
 
             cache_key = nc_file_path
-            tree = self.kdtree_cache[cache_key]
             grid_info = self.grid_cache[cache_key]
 
-            _, indices = tree.query(coords_array)
-            closest_indices = [np.unravel_index(idx, grid_info['lon_grid'].shape) for idx in indices]
-
             results = []
-            for closest_i, closest_j in closest_indices:
+            for lon, lat in coords_array:
                 try:
+                    # Find the closest grid point
+                    closest_i = int(np.round((lat - grid_info['min_lat']) / grid_info['lat_delta']))
+                    closest_j = int(np.round((lon - grid_info['min_lon']) / grid_info['lon_delta']))
+
                     mean_value = ds_subset[param_name].isel(
                         latitude=closest_i, longitude=closest_j
                     ).mean().item()
@@ -105,5 +106,4 @@ class WhacsWeatherExtractor:
             except:
                 pass
         self.dataset_cache.clear()
-        self.kdtree_cache.clear()
         self.grid_cache.clear()
