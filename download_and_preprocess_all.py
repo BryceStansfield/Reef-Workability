@@ -10,8 +10,6 @@ from visualization.constrained_probability_heatmaps import plot_workability_heat
 
 import pathlib
 
-# TODO: Look into failures. Make it throw on failure, accumulate all throws at end.
-
 def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(__file__).parent / "Data"):
     # Then we download WHACS data.
     print("Starting WHACS download, this may take a long while...")
@@ -58,8 +56,11 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         )
         historical_centroid_weather_data.to_csv(centroid_whacs_path, index=False)
     
+    # Output graphs
+    plot_workability_heatmaps_with_constraints(best_model_path, historical_centroid_weather_data, save_directory=pathlib.Path("PlotOutputs/heatmaps"))
+
     # Predict workability for each centroid-day combination, using the best model.
-    """     predicted_workability_path = download_folder / "predicted_workability_for_centroids.csv"
+    predicted_workability_path = download_folder / "predicted_workability_for_centroids.csv"
     if predicted_workability_path.exists():
         print(f"Loading cached predicted workability for centroids from {predicted_workability_path}")
         predicted_workability = pd.read_csv(predicted_workability_path)
@@ -67,11 +68,6 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         print("Predicting workability for each centroid-day combination, this also may take a long while...")
         predicted_workability = predict_success_prob_for_reef_visits(best_model_path, historical_centroid_weather_data)
         predicted_workability.to_csv(download_folder / "predicted_workability_for_centroids.csv", index=False)
-    """
-
-    # Output graphs
-    plot_workability_heatmaps_with_constraints(best_model_path, historical_centroid_weather_data, save_directory=pathlib.Path("PlotOutputs/heatmaps"))
-    plot_workability_heatmaps_with_constraints(best_monotonic_model_path, historical_centroid_weather_data, save_directory=pathlib.Path("PlotOutputs/monotonic_heatmaps"))
 
 if __name__ == "__main__":
     download_and_process_all_data()

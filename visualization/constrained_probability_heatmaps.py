@@ -1,6 +1,7 @@
 from visualization.wind_wave_constraint_analysis import WindWaveConstraintAnalysis
 from models.model_training import ModelAndCalibrationCurve
 import pickle
+from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -21,22 +22,16 @@ def generate_plot_for_month_waveheight(wave_height, month, constraint_analysis: 
     data['wind_magnitude'] = np.hypot(data['u_wind'], data['v_wind'])
     data['month'] = month
     
-    predicted_probabilities = model_and_calibration_curve.predict_proba(data)[:,1]
+    predicted_probabilities = model_and_calibration_curve.predict_success_probs(data)
     contour = plt.contourf(np.linspace(-maximum_u_wind, maximum_u_wind, grid_size), np.linspace(-maximum_v_wind, maximum_v_wind, grid_size), predicted_probabilities.reshape(grid_size, grid_size), levels=20, cmap='RdBu', vmin=0, vmax=1)
 
     cbar = plt.colorbar(contour, ticks=[0, 0.25, 0.5, 0.75, 1])
     cbar.set_label('Dive Success Probability')
-    
-    magnitude_range = constraint_analysis.get_quantiles_for_month(month, "wind_magnitude")
-    u_wind_range = constraint_analysis.get_quantiles_for_month(month, "u_wind")
-    v_wind_range = constraint_analysis.get_quantiles_for_month(month, "v_wind")
 
-
-    # Let's plot a box of realistic wind conditions based on our wind magnitude analysis.
-    plt.plot([u_wind_range[0.01], u_wind_range[0.01]], [v_wind_range[0.01], v_wind_range[0.99]], color='black', linestyle='-', zorder=10)
-    plt.plot([u_wind_range[0.99], u_wind_range[0.99]], [v_wind_range[0.01], v_wind_range[0.99]], color='black', linestyle='-', zorder=10)
-    plt.plot([u_wind_range[0.01], u_wind_range[0.99]], [v_wind_range[0.01], v_wind_range[0.01]], color='black', linestyle='-', zorder=10)
-    plt.plot([u_wind_range[0.01], u_wind_range[0.99]], [v_wind_range[0.99], v_wind_range[0.99]], color='black', linestyle='-', zorder=10)
+    # Let's plot a polygon of realistic wind conditions
+    polygon_points = constraint_analysis.convex_hulls[month].points[constraint_analysis.convex_hulls[month].vertices]
+    polygon_patch = Polygon(polygon_points, ec="black", fc=None)
+    plt.gca().add_patch(polygon_patch)
     
     # Saving our plot.
     save_directory.mkdir(parents=True, exist_ok=True)
@@ -48,7 +43,7 @@ def plot_workability_heatmaps_with_constraints(best_model_path, centroid_weather
         best_model = pickle.load(f)
 
     constraint_analysis = WindWaveConstraintAnalysis(centroid_weather_data)
-    constraint_analysis.compute_constraints()
+    constraint_analysis.compute_quantiles()
 
     for month in range(1, 13):
         wave_height_quantiles = constraint_analysis.get_quantiles_for_month(month, "wave_height")

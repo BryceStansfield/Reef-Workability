@@ -2,8 +2,6 @@
 # using temporal cross-validation with SMOTE oversampling or class-weighting to predict
 # reef survey workability from wave height and wind component features.
 
-from re import search
-
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
@@ -59,13 +57,19 @@ class WindDirectionColumns(BaseEstimator, TransformerMixin):
         return X_new
 
 class ModelAndCalibrationCurve:
-    def __init__(self, model_name, model, calibration_curve):
+    def __init__(self, model_name, model, calibration_curve, success_samples, failure_samples, empirical_success_prob):
         self.model_name = model_name
         self.model = model
         self.calibration_curve = calibration_curve
+
+        self.success_samples_equiv = success_samples * (1/empirical_success_prob)
+        self.failure_samples_equiv = failure_samples * (1/(1-empirical_success_prob))
     
     def predict_proba_base(self, X):
         return self.calibration_curve.calibrate(self.model.predict_proba(X))
+    
+    def predict_success_probs(self, X):
+        return (X[:,1] * self.success_samples_equiv)/(X[:,1] * self.success_samples_equiv + X[:,0] * self.failure_samples_equiv)
 
     def __repr__(self) -> str:
         return f"ModelAndCalibrationCurve(model_name={self.model_name}"
@@ -181,7 +185,7 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
         calib = mli.SplineCalib()
         calib.fit(cv_preds_train, data_Y)
         search.fit(data_X, data_Y)
-        model = ModelAndCalibrationCurve(model_name, search.best_estimator_, calib)
+        model = ModelAndCalibrationCurve(model_name, search.best_estimator_, calib, sum(data_Y), sum(1-data_Y), 0.1)        # TODO: Replace this 0.1 with a better estimate based on data.
 
         return model
 
