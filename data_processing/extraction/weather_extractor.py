@@ -1,28 +1,15 @@
 import pathlib
-from scipy.spatial import KDTree
 import numpy as np
 import xarray as xr
 
-class WhacsWeatherExtractor:
-    def __init__(self, data_base_path):
-        self.data_base_path = pathlib.Path(data_base_path)
-
+class NetCDFWeatherExtractor:
+    def __init__(self):
         self.dataset_cache = {}
         self.grid_cache = {}
 
     def get_nc_file_path(self, parameter, date):
-        year_month = date.strftime('%Y%m')
-
-        parameter_path: pathlib.Path = self.data_base_path / parameter
-        if not parameter_path.exists():
-            return None
-
-        for file in parameter_path.iterdir():
-            if file.is_file() and file.name.startswith(parameter) and year_month in file.name:
-                return str(file)
-
-        return None
-
+        raise NotImplemented()
+    
     def load_and_cache_dataset(self, nc_file_path):
         path = pathlib.Path(nc_file_path)
         if nc_file_path is None or not path.exists():
@@ -111,3 +98,38 @@ class WhacsWeatherExtractor:
                 pass
         self.dataset_cache.clear()
         self.grid_cache.clear()
+
+class WhacsWeatherExtractor(NetCDFWeatherExtractor):
+    def __init__(self, data_base_path):
+        self.data_base_path = pathlib.Path(data_base_path)
+
+        super().__init__()
+
+    def get_nc_file_path(self, parameter, date):
+        year_month = date.strftime('%Y%m')
+
+        parameter_path: pathlib.Path = self.data_base_path / parameter
+        if not parameter_path.exists():
+            return None
+
+        for file in parameter_path.iterdir():
+            if file.is_file() and file.name.startswith(parameter) and year_month in file.name:
+                return str(file)
+
+        return None
+
+class NoaaWW3Extractor(NetCDFWeatherExtractor):
+    def __init__(self, data_base_path):
+        self.data_base_path = pathlib.Path(data_base_path)
+
+        super().__init__()
+
+    def get_nc_file_path(self, parameter, date):
+        year = date.strftime('%Y')
+        
+        if parameter == "Thgt":
+            path = self.data_base_path / f"{year}_wave_heights.nc"
+        
+        if not path.exists():
+            return None
+        return str(path)

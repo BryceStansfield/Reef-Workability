@@ -25,7 +25,7 @@ class DownloadProgress:
 
 BLOCKSIZE = 1024 * 1024  # 1 MB
 
-def download_file(url: str, folder: pathlib.Path, progress_tracker: DownloadProgress) -> bool:
+def download_file(url: str, folder: pathlib.Path, progress_tracker: DownloadProgress = None, filename="") -> bool:
     try:
         session = requests.Session()
 
@@ -40,14 +40,16 @@ def download_file(url: str, folder: pathlib.Path, progress_tracker: DownloadProg
 
         response = session.get(url, stream=True, timeout=30, )
 
-        filename = url.split('/')[-1]
+        if filename == "":
+            filename = url.split('/')[-1]
         filepath: pathlib.Path = folder / filename
 
         touch_filename = filename + ".downloaded"
         touch_filepath = folder / touch_filename
         if touch_filepath.exists():
             print(f"File {filename} already marked as downloaded. Skipping download.")
-            progress_tracker.update()
+            if progress_tracker is not None:
+                progress_tracker.update()
             return True
         
 
@@ -56,7 +58,8 @@ def download_file(url: str, folder: pathlib.Path, progress_tracker: DownloadProg
 
             if filepath.exists() and filepath.stat().st_size == int(response.headers.get('content-length', 0)):
                 print(f"File {filename} already exists and is complete. Skipping download.")
-                progress_tracker.update()
+                if progress_tracker is not None:
+                    progress_tracker.update()
                 touch_filepath.touch()
                 return True
 
@@ -74,7 +77,8 @@ def download_file(url: str, folder: pathlib.Path, progress_tracker: DownloadProg
                 return False
 
             print(f"Successfully downloaded {filename}")
-            progress_tracker.update()
+            if progress_tracker is not None:
+                progress_tracker.update()
             touch_filepath.touch()
             return True
         else:

@@ -1,4 +1,4 @@
-from data_processing.extraction.whacs_weather_extractor import WhacsWeatherExtractor
+from data_processing.extraction.weather_extractor import WhacsWeatherExtractor
 import pandas as pd
 import pathlib
 from datetime import datetime, timedelta

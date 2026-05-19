@@ -5,9 +5,9 @@ import pandas as pd
 import numpy as np
 import pathlib
 
-from data_processing.extraction.whacs_weather_extractor import WhacsWeatherExtractor
+from data_processing.extraction.weather_extractor import WhacsWeatherExtractor
 
-def construct_csvs_with_weather_data(cots_dfs_with_coords: list[pd.DataFrame], whacs_base_path: pathlib.Path) -> list[pd.DataFrame]:
+def construct_csvs_with_whacs_weather_data(cots_dfs_with_coords: list[pd.DataFrame], whacs_base_path: pathlib.Path) -> list[pd.DataFrame]:
     # Initializing our WhacsWeatherExtractor.
     whacs_extractor = WhacsWeatherExtractor(whacs_base_path)
 

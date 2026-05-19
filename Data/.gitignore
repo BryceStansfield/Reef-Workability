@@ -16,3 +16,7 @@ partial_historical_whacs/*
 partial_historical_whacs
 *.pickle
 centroid_historical_whacs.csv
+*.docx
+.~lock*
+noaa_ww3*
+BPM_weather_failures.csv
