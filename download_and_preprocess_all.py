@@ -41,7 +41,7 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
 
     dfs_with_whacs_weather = construct_csvs_with_whacs_weather_data([survey_data, cots_with_coords], download_folder / "whacs")
 
-    merged_df = merge_visit_dfs(dfs_with_whacs_weather, ["surveyData", "COTS"], [True, False])
+    merged_df = merge_visit_dfs(dfs_with_whacs_weather + [bpm_visits_with_weather], ["surveyData", "COTS", "BPM"], [True, False, False])
     merged_df.to_csv(download_folder / "combined_visits_with_weather.csv", index=False)
 
     # Training our models.
@@ -53,9 +53,6 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
     else:
         print("Best model already exists, skipping training.")
     
-    bpm_success_predictions = predict_success_prob_for_reef_visits(best_model_path, merge_visit_dfs([bpm_visits_with_weather], ["bpm"], [False]))
-    bpm_success_predictions.to_csv(download_folder / "bpm_probs.csv")
-
     # Now, let's do the setup for batch workability prediction.
     centroid_whacs_path = download_folder / "centroid_historical_whacs.csv"
 
