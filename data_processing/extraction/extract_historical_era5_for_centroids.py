@@ -1,26 +1,30 @@
-from data_processing.extraction.weather_extractor import WhacsWeatherExtractor
+from data_processing.extraction.weather_extractor import ERA5Extractor
 import pandas as pd
 import pathlib
 from datetime import datetime, timedelta
 import numpy as np
 import multiprocessing
 
-def extract_historical_whacs_for_centroids_in_month(centroids: list[tuple[float, float]], whacs_base_path: pathlib.Path, target_month_start: datetime, results_path: pathlib.Path):
+def extract_historical_era5_for_centroids_in_month(centroids: list[tuple[float, float]], era5_base_path: pathlib.Path, target_month_start: datetime, results_path: pathlib.Path):
     if results_path.exists():
-        print(f"Loading cached historical WHACS data for month starting {target_month_start.strftime('%Y-%m-%d')} from {results_path}")
+        print(f"Loading cached historical ERA5 data for month starting {target_month_start.strftime('%Y-%m-%d')} from {results_path}")
         return pd.read_csv(results_path)
 
-    print(f"Extracting WHACS data for month starting {target_month_start.strftime('%Y-%m-%d')}")
+    print(f"Extracting ERA5 data for month starting {target_month_start.strftime('%Y-%m-%d')}")
 
     cur_date = target_month_start
-    extractor = WhacsWeatherExtractor(whacs_base_path)
+    extractor = ERA5Extractor(era5_base_path)
         
     rows = []
+    np_centroids = np.array(centroids)
 
     while cur_date.month == target_month_start.month:
-        wave_heights = extractor.extract_batch_daytime_hours_mean_by_parameter("hs", cur_date, np.array(centroids))
-        u_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("uwnd", cur_date, np.array(centroids))
-        v_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("vwnd", cur_date, np.array(centroids))
+        wave_heights = extractor.extract_batch_daytime_hours_mean_by_parameter("swh", cur_date, np_centroids)
+        u_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("u", cur_date, np_centroids)
+        v_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("v", cur_date, np_centroids)
+        wave_periods = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwp", date, np_centroids)
+        wave_directions = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwd", date, np_centroids)
+        precipitations = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mtpr", date, np_centroids)
 
         for i in range(len(centroids)):
             x, y = centroids[i]
@@ -33,6 +37,9 @@ def extract_historical_whacs_for_centroids_in_month(centroids: list[tuple[float,
                 "x": x,
                 "datetime": cur_date,
                 "wave_height": wave_heights[i],
+                "wave_period":wave_periods[i],
+                "wave_direction":wave_directions[i],
+                "precipitation": precipitations[i],
                 "u_wind": u_winds[i],
                 "v_wind": v_winds[i],
                 "wind_magnitude": np.hypot(u_winds[i], v_winds[i])
@@ -46,7 +53,7 @@ def extract_historical_whacs_for_centroids_in_month(centroids: list[tuple[float,
         
     return output_df
 
-def extract_historical_whacs_for_centroids(centroids_path: pathlib.Path, whacs_base_path: pathlib.Path, partial_output_paths: pathlib.Path, start_date: datetime = datetime(2005,1,1), end_date: datetime = datetime(2023, 12, 31)):
+def extract_historical_era5_for_centroids(centroids_path: pathlib.Path, era5_base_path: pathlib.Path, partial_output_paths: pathlib.Path, start_date: datetime = datetime(2005,1,1), end_date: datetime = datetime(2023, 12, 31)):
     partial_output_paths.mkdir(parents=True, exist_ok=True)
 
     centroids = []
@@ -71,7 +78,7 @@ def extract_historical_whacs_for_centroids(centroids_path: pathlib.Path, whacs_b
             else:
                 cur_date = datetime(cur_date.year, cur_date.month + 1, 1)
 
-        results = [pool.apply_async(extract_historical_whacs_for_centroids_in_month, args=(centroids, whacs_base_path, month_start, partial_output_paths / f"{month_start.strftime('%Y-%m')}.csv")) for month_start in month_starts]
+        results = [pool.apply_async(extract_historical_era5_for_centroids_in_month, args=(centroids, era5_base_path, month_start, partial_output_paths / f"{month_start.strftime('%Y-%m')}.csv")) for month_start in month_starts]
         output_dfs = [result.get() for result in results]
     
     return pd.concat(output_dfs, ignore_index=True)

@@ -5,11 +5,11 @@ import pandas as pd
 import numpy as np
 import pathlib
 
-from data_processing.extraction.weather_extractor import WhacsWeatherExtractor
+from data_processing.extraction.weather_extractor import ERA5Extractor
 
-def construct_csvs_with_whacs_weather_data(cots_dfs_with_coords: list[pd.DataFrame], whacs_base_path: pathlib.Path) -> list[pd.DataFrame]:
+def construct_csvs_with_era5_weather_data(cots_dfs_with_coords: list[pd.DataFrame], era5_base_path: pathlib.Path) -> list[pd.DataFrame]:
     # Initializing our WhacsWeatherExtractor.
-    whacs_extractor = WhacsWeatherExtractor(whacs_base_path)
+    era5_extractor = ERA5Extractor(era5_base_path)
 
     results = []
 
@@ -42,6 +42,9 @@ def construct_csvs_with_whacs_weather_data(cots_dfs_with_coords: list[pd.DataFra
             
         # Adding and filling our new weather columns.
         cots_df['wave_height'] = np.nan
+        cots_df['wave_period'] = np.nan
+        cots_df['wave_direction'] = np.nan
+        cots_df['precipitation'] = np.nan
         cots_df['u_wind'] = np.nan
         cots_df['v_wind'] = np.nan
 
@@ -49,12 +52,19 @@ def construct_csvs_with_whacs_weather_data(cots_dfs_with_coords: list[pd.DataFra
             date = row['date']
             x_coord = row['x']
             y_coord = row['y']
+            coords = np.array([[x_coord, y_coord]])
 
-            wave_height = whacs_extractor.extract_batch_daytime_hours_mean_by_parameter("hs", date, np.array([[x_coord, y_coord]]))[0]
-            u_wind = whacs_extractor.extract_batch_daytime_hours_mean_by_parameter("uwnd", date, np.array([[x_coord, y_coord]]))[0]
-            v_wind = whacs_extractor.extract_batch_daytime_hours_mean_by_parameter("vwnd", date, np.array([[x_coord, y_coord]]))[0]
+            wave_height = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("swh", date, coords)[0]
+            wave_period = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwp", date, coords)[0]
+            wave_direction = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwd", date, coords)[0]
+            precipitation = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mtpr", date, coords)[0]
+            u_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("u", date, coords)[0]
+            v_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("v", date, coords)[0]
 
-            cots_df.at[idx, 'wave_height'] = wave_height
+            cots_df[idx, 'wave_height'] = wave_height
+            cots_df[idx, 'wave_period'] = wave_period
+            cots_df[idx, 'wave_direction'] = wave_direction
+            cots_df[idx, 'precipitation'] = precipitation
             cots_df.at[idx, 'u_wind'] = u_wind
             cots_df.at[idx, 'v_wind'] = v_wind
 

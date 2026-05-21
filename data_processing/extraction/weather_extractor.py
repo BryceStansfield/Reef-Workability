@@ -99,41 +99,6 @@ class NetCDFWeatherExtractor:
         self.dataset_cache.clear()
         self.grid_cache.clear()
 
-class WhacsWeatherExtractor(NetCDFWeatherExtractor):
-    def __init__(self, data_base_path):
-        self.data_base_path = pathlib.Path(data_base_path)
-
-        super().__init__()
-
-    def get_nc_file_path(self, parameter, date):
-        year_month = date.strftime('%Y%m')
-
-        parameter_path: pathlib.Path = self.data_base_path / parameter
-        if not parameter_path.exists():
-            return None
-
-        for file in parameter_path.iterdir():
-            if file.is_file() and file.name.startswith(parameter) and year_month in file.name:
-                return str(file)
-
-        return None
-
-class NoaaWW3Extractor(NetCDFWeatherExtractor):
-    def __init__(self, data_base_path):
-        self.data_base_path = pathlib.Path(data_base_path)
-
-        super().__init__()
-
-    def get_nc_file_path(self, parameter, date):
-        year = date.strftime('%Y')
-        
-        if parameter == "Thgt":
-            path = self.data_base_path / f"{year}_wave_heights.nc"
-        
-        if not path.exists():
-            return None
-        return str(path)
-
 class ERA5Extractor(NetCDFWeatherExtractor):
     def __init__(self, data_base_path):
         self.data_base_path = pathlib.Path(data_base_path)
@@ -149,6 +114,12 @@ class ERA5Extractor(NetCDFWeatherExtractor):
             path = self.data_base_path / f"{year}_10m_u_component_of_wind.nc"
         elif parameter == "v":
             path = self.data_base_path / f"{year}_10m_v_component_of_wind.nc"
+        elif parameter == "mwd":
+            path = self.data_base_path / f"{year}_mean_wave_direction.nc"
+        elif parameter == "mwp":
+            path = self.data_base_path / f"{year}_mean_wave_period.nc"
+        elif parameter == "mtpr":
+            path = self.data_base_path / f"{year}_mean_total_precipitation_rate.ns"
         else:
             raise NotImplemented()
         

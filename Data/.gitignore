@@ -19,5 +19,5 @@ centroid_historical_whacs.csv
 *.docx
 .~lock*
 noaa_ww3*
-BPM_weather_failures.csv
+BPM_weather_failures*
 bpm_probs.csv

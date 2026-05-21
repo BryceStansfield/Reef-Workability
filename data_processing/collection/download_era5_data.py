@@ -54,7 +54,7 @@ def download_all_era5_data(download_base_path: pathlib.Path):
         "mean_wave_direction",
         "mean_wave_period",
         "significant_height_of_combined_wind_waves_and_swell",
-        "total_precipitation"]
+        "mean_total_precipitation_rate"]
     years = [i for i in range(2005, 2026)]
     download_calls = []
 
