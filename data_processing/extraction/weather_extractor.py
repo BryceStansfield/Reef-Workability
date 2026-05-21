@@ -133,3 +133,26 @@ class NoaaWW3Extractor(NetCDFWeatherExtractor):
         if not path.exists():
             return None
         return str(path)
+
+class ERA5Extractor(NetCDFWeatherExtractor):
+    def __init__(self, data_base_path):
+        self.data_base_path = pathlib.Path(data_base_path)
+
+        super().__init__()
+    
+    def get_nc_file_path(self, parameter, date):
+        year = date.strftime('%Y')
+
+        if parameter == "swh":
+            path = self.data_base_path / f"{year}_significant_height_of_combined_wind_waves_and_swell.nc"
+        elif parameter == "u":
+            path = self.data_base_path / f"{year}_10m_u_component_of_wind.nc"
+        elif parameter == "v":
+            path = self.data_base_path / f"{year}_10m_v_component_of_wind.nc"
+        else:
+            raise NotImplemented()
+        
+        if not path.exists():
+            return None
+        
+        return str(path)
