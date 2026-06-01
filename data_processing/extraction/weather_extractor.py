@@ -3,9 +3,10 @@ import numpy as np
 import xarray as xr
 
 class NetCDFWeatherExtractor:
-    def __init__(self):
+    def __init__(self, time_name):
         self.dataset_cache = {}
         self.grid_cache = {}
+        self.time_name = time_name
 
     def get_nc_file_path(self, parameter, date):
         raise NotImplemented()
@@ -53,11 +54,11 @@ class NetCDFWeatherExtractor:
         try:
             date_str = date.strftime('%Y-%m-%d')
             start_time = f"{date_str}T09:00:00"
-            end_time = f"{date_str}T14:00:00"
+            end_time = f"{date_str}T14:59:59"
 
-            ds_subset = ds.sel(time=slice(start_time, end_time))
+            ds_subset = ds.sel(**{self.time_name: slice(start_time, end_time)})
 
-            if len(ds_subset.time) == 0:
+            if len(ds_subset[self.time_name]) == 0:
                 return np.full(len(coords_array), np.nan)
 
             cache_key = nc_file_path
@@ -103,27 +104,28 @@ class ERA5Extractor(NetCDFWeatherExtractor):
     def __init__(self, data_base_path):
         self.data_base_path = pathlib.Path(data_base_path)
 
-        super().__init__()
+        super().__init__("valid_time")
     
     def get_nc_file_path(self, parameter, date):
         year = date.strftime('%Y')
 
         if parameter == "swh":
             path = self.data_base_path / f"{year}_significant_height_of_combined_wind_waves_and_swell.nc"
-        elif parameter == "u":
+        elif parameter == "u10":
             path = self.data_base_path / f"{year}_10m_u_component_of_wind.nc"
-        elif parameter == "v":
+        elif parameter == "v10":
             path = self.data_base_path / f"{year}_10m_v_component_of_wind.nc"
         elif parameter == "mwd":
             path = self.data_base_path / f"{year}_mean_wave_direction.nc"
         elif parameter == "mwp":
             path = self.data_base_path / f"{year}_mean_wave_period.nc"
-        elif parameter == "mtpr":
-            path = self.data_base_path / f"{year}_mean_total_precipitation_rate.ns"
+        elif parameter == "avg_tprate":
+            path = self.data_base_path / f"{year}_mean_total_precipitation_rate.nc"
         else:
             raise NotImplemented()
         
         if not path.exists():
+            print(path)
             return None
         
         return str(path)

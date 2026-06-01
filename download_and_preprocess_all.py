@@ -7,8 +7,10 @@ from data_processing.extraction.extract_historical_era5_for_centroids import ext
 from data_processing.processing.predict_reef_date_success_probabilities import predict_success_prob_for_reef_visits
 from visualization.constrained_probability_heatmaps import plot_workability_heatmaps_with_constraints
 from data_processing.collection.download_era5_data import download_all_era5_data
+from data_processing.extraction.split_into_daily_csvs import split_into_daily_subsets
 
 import pathlib
+
 
 def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(__file__).parent / "Data"):        
     # Then ERA5 (will remove other sources soon if this works well).
@@ -21,9 +23,10 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         download_folder / 'COTS INLOC Weather impacts.xlsx'
     )
     survey_data = pd.read_csv(download_folder / 'surveyData[63].csv')
+    bpm_data = pd.read_csv(download_folder / "BPM_weather_failures.csv")
 
     # We add wind/wave data to all of our datasets.
-    dfs_with_whacs_weather = construct_csvs_with_era5_weather_data([survey_data, cots_with_coords, bpm_visits_with_weather], download_folder / "era5")
+    dfs_with_whacs_weather = construct_csvs_with_era5_weather_data([survey_data, cots_with_coords, bpm_data], download_folder / "era5")
 
     merged_df = merge_visit_dfs(dfs_with_whacs_weather, ["surveyData", "COTS", "BPM"], [True, False, False])
     merged_df.to_csv(download_folder / "combined_visits_with_weather.csv", index=False)
@@ -38,23 +41,20 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         print("Best model already exists, skipping training.")
     
     # Now, let's do the setup for batch workability prediction.
-    centroid_whacs_path = download_folder / "centroid_historical_whacs.csv"
+    centroid_era5_path = download_folder / "centroid_historical_era5.csv"
 
-    if centroid_whacs_path.exists():
-        print(f"Loading cached historical WHACS data from {centroid_whacs_path}")
-        historical_centroid_weather_data = pd.read_csv(centroid_whacs_path)
+    if centroid_era5_path.exists():
+        print(f"Loading cached historical ERA5 data from {centroid_era5_path}")
+        historical_centroid_weather_data = pd.read_csv(centroid_era5_path)
     else:
-        print("Extracting historical WHACS data for centroids, this may take a long while...")
+        print("Extracting historical ERA5 data for centroids, this may take a long while...")
         historical_centroid_weather_data = extract_historical_era5_for_centroids(
             pathlib.Path(__file__).parent / "Data" / "ReefCentroids.csv",
-            download_folder / "whacs",
-            download_folder / "partial_historical_whacs"
+            download_folder / "era5",
+            download_folder / "partial_historical_era5"
         )
-        historical_centroid_weather_data.to_csv(centroid_whacs_path, index=False)
+        historical_centroid_weather_data.to_csv(centroid_era5_path, index=False)
     
-    # Output graphs
-    plot_workability_heatmaps_with_constraints(best_model_path, historical_centroid_weather_data, save_directory=pathlib.Path("PlotOutputs/heatmaps"))
-
     # Predict workability for each centroid-day combination, using the best model.
     predicted_workability_path = download_folder / "predicted_workability_for_centroids.csv"
     if predicted_workability_path.exists():
@@ -64,6 +64,18 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         print("Predicting workability for each centroid-day combination, this also may take a long while...")
         predicted_workability = predict_success_prob_for_reef_visits(best_model_path, historical_centroid_weather_data)
         predicted_workability.to_csv(download_folder / "predicted_workability_for_centroids.csv", index=False)
+    predicted_workability["datetime"] = pd.to_datetime(predicted_workability["datetime"], format="%Y-%m-%d %H:%M:%S", errors='coerce')
+
+    # Output graphs
+    plot_workability_heatmaps_with_constraints(predicted_workability, save_directory=pathlib.Path("PlotOutputs/heatmaps"))
+
+    # Output daily predicted workabilities.
+    split_into_daily_subsets(2013, predicted_workability, download_folder / "yearly_subsetted_data")
 
 if __name__ == "__main__":
     download_and_process_all_data()
+
+# NOTE to self:
+# 6 values from 9am to 3pm amoung each dimensions.
+# Send lat/lons.
+# Send dates.

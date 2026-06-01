@@ -1,51 +1,79 @@
-from visualization.wind_wave_constraint_analysis import WindWaveConstraintAnalysis
-from models.model_training import ModelAndCalibrationCurve
 import pickle
-from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import pathlib
+import math
+from PIL import Image
+from models.model_training import MODEL_FEATURES, MODEL_FEATURES_TO_PRETTY_NAME
+from matplotlib.ticker import MaxNLocator
 
-def generate_plot_for_month_waveheight(wave_height, month, constraint_analysis: WindWaveConstraintAnalysis, model_and_calibration_curve: ModelAndCalibrationCurve, maximum_u_wind, maximum_v_wind, save_directory):
-    plt.title(f"Predicted Workability Probability for Month {month} at Wave Height {wave_height:.2f}m")
-    plt.xlabel("U Wind Component (m/s)")
-    plt.ylabel("V Wind Component (m/s)")
+def plot_along_dimensions(x: str, y: str, monthly_table: pd.DataFrame, bounds_per_feature, save_path: pathlib.Path, num_bins=50):
+    x_bounds = bounds_per_feature[x]
+    y_bounds = bounds_per_feature[y]
 
-    # First, let's predict the probability of workability across a grid of u and v wind values, at the given wave height and month.
-    grid_size = 100
-    data = pd.DataFrame({
-        "wave_height": [wave_height] * grid_size**2,
-        "u_wind": np.linspace(-maximum_u_wind, maximum_u_wind, grid_size).repeat(grid_size),
-        "v_wind": np.tile(np.linspace(-maximum_v_wind, maximum_v_wind, grid_size), grid_size),
-    })
-    data['wind_magnitude'] = np.hypot(data['u_wind'], data['v_wind'])
-    data['month'] = month
+    x_bin_width = (x_bounds[1]-x_bounds[0])/num_bins
+    y_bin_width = (y_bounds[1]-y_bounds[0])/num_bins
+
+    vals = [[[] for _ in range(num_bins)] for _ in range(num_bins)]
+
+    for _, row in monthly_table.iterrows():
+        x_val = getattr(row, x)
+        y_val = getattr(row, y)
+        prob_val = getattr(row, "predicted_success_prob")
+
+        x_bin = math.floor((x_val - x_bounds[0])/x_bin_width)
+        y_bin = math.floor((y_val - y_bounds[0])/y_bin_width)
+
+        if x_bin == num_bins:
+            x_bin -= 1
+        if y_bin == num_bins:
+            y_bin -= 1
+
+        vals[y_bin][x_bin].append(prob_val)
     
-    predicted_probabilities = model_and_calibration_curve.predict_success_probs(data)
-    contour = plt.contourf(np.linspace(-maximum_u_wind, maximum_u_wind, grid_size), np.linspace(-maximum_v_wind, maximum_v_wind, grid_size), predicted_probabilities.reshape(grid_size, grid_size), levels=20, cmap='RdBu', vmin=0, vmax=1)
+    im = Image.new("RGBA", (num_bins, num_bins))
+    for y_bin in range(num_bins):
+        for x_bin in range(num_bins):
+            xy_vals = vals[y_bin][x_bin]
 
-    cbar = plt.colorbar(contour, ticks=[0, 0.25, 0.5, 0.75, 1])
-    cbar.set_label('Dive Success Probability')
-
-    # Let's plot a polygon of realistic wind conditions
-    polygon_points = constraint_analysis.convex_hulls[month].points[constraint_analysis.convex_hulls[month].vertices]
-    polygon_patch = Polygon(polygon_points, ec="black", fc=None)
-    plt.gca().add_patch(polygon_patch)
+            if len(xy_vals) == 0:
+                im.putpixel((x_bin, y_bin), (0,0,0,0))
+            else:
+                average_prob = sum(xy_vals)/len(xy_vals)
+                blue = round(255 * average_prob)
+                red = 255 - blue
+                im.putpixel((x_bin, y_bin), (red, 0, blue, 255))
     
-    # Saving our plot.
-    save_directory.mkdir(parents=True, exist_ok=True)
-    plt.savefig(save_directory / f"workability_heatmap_month_{month}_waveheight_{wave_height:.2f}.png")
-    plt.close()
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(im,
+                aspect='auto',
+                origin='lower',
+                extent=[x_bounds[0], x_bounds[1], y_bounds[0], y_bounds[1]])
+    ax.set_box_aspect(1)
+    x_pretty = MODEL_FEATURES_TO_PRETTY_NAME[x]
+    y_pretty = MODEL_FEATURES_TO_PRETTY_NAME[y]
 
-def plot_workability_heatmaps_with_constraints(best_model_path, centroid_weather_data, save_directory=pathlib.Path("PlotOutputs/heatmaps")):
-    with open(best_model_path, 'rb') as f:
-        best_model = pickle.load(f)
+    ax.set_xlabel(x_pretty)
+    ax.set_ylabel(y_pretty)
+    ax.set_title(f"{x_pretty} vs {y_pretty} Success Probabilites")
 
-    constraint_analysis = WindWaveConstraintAnalysis(centroid_weather_data)
-    constraint_analysis.compute_quantiles()
+    ax.xaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1,2,5,10]))
+    ax.yaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1,2,5,10]))
+
+    fig.savefig(save_path)
+
+def plot_workability_heatmaps_with_constraints(historical_probabilities, save_directory=pathlib.Path("PlotOutputs/heatmaps")):
+    bounds_per_feature = {}
+    for feature in MODEL_FEATURES:
+        bounds_per_feature[feature] = (historical_probabilities[feature].min(), historical_probabilities[feature].max())
 
     for month in range(1, 13):
-        wave_height_quantiles = constraint_analysis.get_quantiles_for_month(month, "wave_height")
-        for wave_height in np.arange(int(wave_height_quantiles[0.01]*10)/10, int(wave_height_quantiles[0.99]*10)/10 + 0.1, 0.1):
-            generate_plot_for_month_waveheight(wave_height, month, constraint_analysis, best_model, maximum_u_wind=20, maximum_v_wind=20, save_directory=save_directory)
+        for i in range(len(MODEL_FEATURES)):
+            for j in range(i+1, len(MODEL_FEATURES)):
+
+                if MODEL_FEATURES[i] == "day_of_year" or MODEL_FEATURES[j] == "day_of_year":
+                    continue
+                
+                month_table = historical_probabilities[historical_probabilities["datetime"].dt.month == month]
+                plot_along_dimensions(MODEL_FEATURES[i], MODEL_FEATURES[j], month_table, bounds_per_feature, pathlib.Path(save_directory / f"{month}_{MODEL_FEATURES[i]}_{MODEL_FEATURES[j]}.png"))

@@ -13,18 +13,18 @@ def extract_historical_era5_for_centroids_in_month(centroids: list[tuple[float, 
     print(f"Extracting ERA5 data for month starting {target_month_start.strftime('%Y-%m-%d')}")
 
     cur_date = target_month_start
-    extractor = ERA5Extractor(era5_base_path)
+    era5_extractor = ERA5Extractor(era5_base_path)
         
     rows = []
     np_centroids = np.array(centroids)
 
     while cur_date.month == target_month_start.month:
-        wave_heights = extractor.extract_batch_daytime_hours_mean_by_parameter("swh", cur_date, np_centroids)
-        u_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("u", cur_date, np_centroids)
-        v_winds = extractor.extract_batch_daytime_hours_mean_by_parameter("v", cur_date, np_centroids)
-        wave_periods = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwp", date, np_centroids)
-        wave_directions = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwd", date, np_centroids)
-        precipitations = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mtpr", date, np_centroids)
+        wave_heights = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("swh", cur_date, np_centroids)
+        u_winds = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("u10", cur_date, np_centroids)
+        v_winds = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("v10", cur_date, np_centroids)
+        wave_periods = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwp", cur_date, np_centroids)
+        wave_directions = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwd", cur_date, np_centroids)
+        precipitations = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("avg_tprate", cur_date, np_centroids)
 
         for i in range(len(centroids)):
             x, y = centroids[i]
@@ -68,7 +68,7 @@ def extract_historical_era5_for_centroids(centroids_path: pathlib.Path, era5_bas
             lat_str, lon_str = txt_centroid.split(",")
             centroids.append((float(lat_str), float(lon_str)))
     
-    with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+    with multiprocessing.Pool(processes=max(multiprocessing.cpu_count()-3, 1)) as pool:
         month_starts = []
         cur_date = start_date
         while cur_date <= end_date:

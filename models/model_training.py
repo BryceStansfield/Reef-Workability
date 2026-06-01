@@ -10,7 +10,7 @@ from sklearn.svm import SVC
 from sklearn.model_selection import GridSearchCV, train_test_split, StratifiedKFold
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import brier_score_loss, f1_score, precision_score, recall_score, precision_recall_curve
+from sklearn.metrics import brier_score_loss, f1_score, precision_score, recall_score, roc_curve
 import ml_insights as mli
 import xgboost as xgb
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -27,6 +27,18 @@ class SinCosMonths(BaseEstimator, TransformerMixin):
         X_new["day_cos"] = np.cos(2 * np.pi * X_new["day_of_year"] / 365)
 
         X_new.drop(columns=["day_of_year"], inplace=True)
+        return X_new
+
+class SinCosWaveDir(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+    
+    def transform(self, X):
+        X_new = X.copy()
+        X_new["wave_direction_sin"] = np.sin(np.pi * X_new["wave_direction"] / 180)
+        X_new["wave_direction_cos"] = np.cos(np.pi * X_new["wave_direction"] / 180)
+
+        X_new.drop(columns=["wave_direction"], inplace=True)
         return X_new
     
 class AbsWind(BaseEstimator, TransformerMixin):
@@ -77,7 +89,17 @@ class ModelAndCalibrationCurve:
     def __repr__(self) -> str:
         return f"ModelAndCalibrationCurve(model_name={self.model_name}"
     
-MODEL_FEATURES = ['wave_height', 'u_wind', 'v_wind', 'wind_magnitude', 'day_of_year']
+MODEL_FEATURES = ['wave_height', 'u_wind', 'v_wind', 'wind_magnitude', "wave_period", "wave_direction", "precipitation", 'day_of_year']
+MODEL_FEATURES_TO_PRETTY_NAME = {
+    "wave_height": "Wave Height",
+    "u_wind": "U Wind",
+    "v_wind": "V Wind",
+    "wind_magnitude": "Wind Magnitude",
+    "wave_period": "Wave Period",
+    "wave_direction": "Wave Direction",
+    "precipitation": "Precipitation",
+    "day_of_year": "Day Of Year"
+}
 
 def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.Path, model_stats_save_path: pathlib.Path):
     # We aim to train calibrated probability models, then evaluate them by their Brier Skill Scores.
@@ -108,30 +130,30 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
 
     model_params = {
         "RandomForest": {
-            'classifier__n_estimators': [1000],     # There's no need to try a small number of trees, since random forest performance should only ever improve with additional trees.
-            'classifier__max_depth': [None, 5],
-            'classifier__min_samples_split': [2, 3, 5],
-            'classifier__min_samples_leaf': [1, 2, 4]
+            'classifier__n_estimators': [1000],   #TEMP  # There's no need to try a small number of trees, since random forest performance should only ever improve with additional trees.
+            'classifier__max_depth': [None, 2, 3, 4, 5],
+            'classifier__min_samples_split': [2, 3, 4, 5],
+            'classifier__min_samples_leaf': [1, 2, 3, 4]
         },
         "LogisticRegression4Comp": {
-            'classifier__C': [0.01, 0.1, 1, 10, 100],
-            'classifier__l1_ratio': [0, 0.5, 1],
+            'classifier__C': 10**np.linspace(-3, 3),
+            'classifier__l1_ratio': np.linspace(0, 1),
         },
         "LogisticRegressionDirection": {
-            'classifier__C': [0.01, 0.1, 1, 10, 100],
-            'classifier__l1_ratio': [0, 0.5, 1],
+            'classifier__C': 10**np.linspace(-3, 3),
+            'classifier__l1_ratio': np.linspace(0, 1),
         },
         "SVM": {
-            'classifier__C': [0.1, 1, 10, 100],
+            'classifier__C': 10**np.linspace(-2, 3),
             'classifier__gamma': ['scale', 'auto', 0.001, 0.01, 0.1, 1],
             'classifier__kernel': ['rbf', 'sigmoid']
         },
         "XGBoost": {
             'classifier__n_estimators': [10, 20, 50, 100, 200, 500],    # XGBoost can overfit with too many trees.
-            'classifier__max_depth': [2,3,4,5],
+            'classifier__max_depth': [2, 3, 4, 5],
             'classifier__learning_rate': [0.01, 0.05, 0.1, 0.2],
-            'classifier__subsample': [0.8, 0.9, 1.0],
-            'classifier__colsample_bytree': [0.8, 0.9, 1.0]
+            'classifier__subsample': [i * 0.1 for i in range(5, 11)],
+            'classifier__colsample_bytree': [i * 0.1 for i in range(5, 11)]
         }
     }
 
@@ -149,6 +171,7 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
         if model_name == 'SVM':
             return Pipeline([
                 ('months', SinCosMonths()),
+                ('wave_direction', SinCosWaveDir()),
                 ('scaler', StandardScaler()),
                 ('classifier', models[model_name])
             ])
@@ -160,6 +183,7 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
 
             return Pipeline([
                 ('months', SinCosMonths()),
+                ('wave_direction', SinCosWaveDir()),
                 wind_transform,
                 ('scaler', StandardScaler()),
                 ('classifier', models[model_name])
@@ -167,6 +191,7 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
         else:
             return Pipeline([
                 ('months', SinCosMonths()),
+                ('wave_direction', SinCosWaveDir()),
                 ('classifier', models[model_name])
             ])
     
@@ -215,11 +240,16 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
         model_stats[model_name] = {}
         model_stats[model_name]["brier_skill_score"] = brier_skill_score
 
-        for (name, pos_label) in [("success", 1), ("failure", 1)]:
+        for (name, pos_label) in [("success", 1), ("failure", 0)]:
             model_stats[model_name][f"{name}_f1"] = f1_score(y_test, model.model.predict(X_test), pos_label=pos_label)
             model_stats[model_name][f"{name}_precision"] = precision_score(y_test, model.model.predict(X_test), pos_label=pos_label)
             model_stats[model_name][f"{name}_recall"] = recall_score(y_test, model.model.predict(X_test), pos_label=pos_label)
-            model_stats[model_name][f"{name}_precision_recall_curve"] = precision_recall_curve(y_test, model.model.predict_proba(X_test)[:, 1], pos_label=pos_label)
+            model_stats[model_name][f"{name}_roc_curve"] = roc_curve(y_test, model.model.predict_proba(X_test)[:, 1], pos_label=pos_label)
+        
+        try:
+            model_stats[model_name]["importances"] = list(zip(model.model.named_steps["classifier"].feature_names_in_, model.model.named_steps["classifier"].feature_importances_))
+        except Exception as e:
+            pass
     
     # Retraining our best model on the full dataset.
     best_model = train_model_with_name(best_model_name, combined_df[MODEL_FEATURES], combined_df['was_successful'].astype(int))

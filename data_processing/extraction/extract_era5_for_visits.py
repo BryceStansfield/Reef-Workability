@@ -11,7 +11,7 @@ def construct_csvs_with_era5_weather_data(cots_dfs_with_coords: list[pd.DataFram
     # Initializing our WhacsWeatherExtractor.
     era5_extractor = ERA5Extractor(era5_base_path)
 
-    results = []
+    result_dfs = []
 
     for cots_with_coords in cots_dfs_with_coords:
         # First let's filter our df down.
@@ -25,12 +25,15 @@ def construct_csvs_with_era5_weather_data(cots_dfs_with_coords: list[pd.DataFram
         if "Date " in cots_df.columns:
             cots_df.rename(columns={"Date ": "date"}, inplace=True)
             cots_df['date'] = pd.to_datetime(cots_df['date'], dayfirst=True, errors='raise')
+        elif "Date" in cots_df.columns:
+            cots_df.rename(columns={"Date": "date"}, inplace=True)
+            cots_df['date'] = pd.to_datetime(cots_df['date'], dayfirst=True, errors='raise')
         elif "date" in cots_df.columns:
             cots_df['date'] = pd.to_datetime(cots_df['date'], format="ISO8601", errors='raise')
         else:
             raise Exception("No date column found in COTS data. Available columns: " + ", ".join(cots_df.columns))
         
-        filtered_df = cots_df[(cots_df['date'] >= '2020-01-01') & (cots_df['date'] < '2024-01-01')]
+        filtered_df = cots_df[(cots_df['date'] >= '2005-01-01') & (cots_df['date'] < '2026-01-01')]
         dropped_num = len(cots_df) - len(filtered_df)
         if dropped_num > 0:
             print(f"Dropping {dropped_num} rows falling outside of 2020-2023.")
@@ -41,14 +44,16 @@ def construct_csvs_with_era5_weather_data(cots_dfs_with_coords: list[pd.DataFram
             raise Exception("No COTS visits found after filtering.")
             
         # Adding and filling our new weather columns.
-        cots_df['wave_height'] = np.nan
-        cots_df['wave_period'] = np.nan
-        cots_df['wave_direction'] = np.nan
-        cots_df['precipitation'] = np.nan
-        cots_df['u_wind'] = np.nan
-        cots_df['v_wind'] = np.nan
+        results = {
+            'wave_height': [],
+            'wave_period': [],
+            'wave_direction': [],
+            'precipitation': [],
+            'u_wind': [],
+            'v_wind': []
+        }
 
-        for idx, row in cots_df.iterrows():
+        for _, row in cots_df.iterrows():
             date = row['date']
             x_coord = row['x']
             y_coord = row['y']
@@ -57,17 +62,22 @@ def construct_csvs_with_era5_weather_data(cots_dfs_with_coords: list[pd.DataFram
             wave_height = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("swh", date, coords)[0]
             wave_period = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwp", date, coords)[0]
             wave_direction = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mwd", date, coords)[0]
-            precipitation = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("mtpr", date, coords)[0]
-            u_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("u", date, coords)[0]
-            v_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("v", date, coords)[0]
+            precipitation = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("avg_tprate", date, coords)[0]
+            u_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("u10", date, coords)[0]
+            v_wind = era5_extractor.extract_batch_daytime_hours_mean_by_parameter("v10", date, coords)[0]
 
-            cots_df[idx, 'wave_height'] = wave_height
-            cots_df[idx, 'wave_period'] = wave_period
-            cots_df[idx, 'wave_direction'] = wave_direction
-            cots_df[idx, 'precipitation'] = precipitation
-            cots_df.at[idx, 'u_wind'] = u_wind
-            cots_df.at[idx, 'v_wind'] = v_wind
+            results['wave_height'].append(wave_height)
+            results['wave_period'].append(wave_period)
+            results['wave_direction'].append(wave_direction)
+            results['precipitation'].append(precipitation)
+            results['u_wind'].append(u_wind)
+            results['v_wind'].append(v_wind)
 
-        results.append(cots_df)
+        cots_df = pd.concat([
+            cots_df,
+            pd.DataFrame(results, index=cots_df.index)
+        ], axis=1)
 
-    return results
+        result_dfs.append(cots_df)
+
+    return result_dfs
