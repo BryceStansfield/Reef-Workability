@@ -7,4 +7,4 @@ def split_into_daily_subsets(year, table: pd.DataFrame, dump_path: pathlib.Path)
     subset_table = table[table["datetime"].dt.year == year]
 
     for day, df in subset_table.groupby("datetime"):
-        df.to_csv(dump_path / f"{day.strftime('%Y-%m-%d')}")
+        df.to_csv(dump_path / f"{day.strftime('%Y-%m-%d')}.csv")

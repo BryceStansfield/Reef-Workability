@@ -210,10 +210,10 @@ def train_and_evaluate_probability_models(combined_df, model_save_path: pathlib.
         )
         
         cv_preds_train = mli.cv_predictions(search, data_X, data_Y, clone_model=True)
-        calib = mli.SplineCalib()
+        calib = mli.SplineCalib(random_state=42)
         calib.fit(cv_preds_train, data_Y)
         search.fit(data_X, data_Y)
-        model = ModelAndCalibrationCurve(model_name, search.best_estimator_, calib, sum(data_Y), sum(1-data_Y), 0.9)        # TODO: Replace this 0.9 with a better estimate based on data.
+        model = ModelAndCalibrationCurve(model_name, search.best_estimator_, calib, sum(data_Y), sum(1-data_Y), 1-0.1875)
 
         return model
 

@@ -8,12 +8,13 @@ from data_processing.processing.predict_reef_date_success_probabilities import p
 from visualization.constrained_probability_heatmaps import plot_workability_heatmaps_with_constraints
 from data_processing.collection.download_era5_data import download_all_era5_data
 from data_processing.extraction.split_into_daily_csvs import split_into_daily_subsets
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
 
 import pathlib
 
 
 def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(__file__).parent / "Data"):        
-    # Then ERA5 (will remove other sources soon if this works well).
     download_all_era5_data(download_folder / "era5")
     
     print("Downloads finished")
@@ -28,7 +29,7 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
     # We add wind/wave data to all of our datasets.
     dfs_with_whacs_weather = construct_csvs_with_era5_weather_data([survey_data, cots_with_coords, bpm_data], download_folder / "era5")
 
-    merged_df = merge_visit_dfs(dfs_with_whacs_weather, ["surveyData", "COTS", "BPM"], [True, False, False])
+    merged_df = merge_visit_dfs(dfs_with_whacs_weather, ["AIMS", "COTS", "BPM"], [True, False, False])
     merged_df.to_csv(download_folder / "combined_visits_with_weather.csv", index=False)
 
     # Training our models.
@@ -66,16 +67,24 @@ def download_and_process_all_data(download_folder: pathlib.Path = pathlib.Path(_
         predicted_workability.to_csv(download_folder / "predicted_workability_for_centroids.csv", index=False)
     predicted_workability["datetime"] = pd.to_datetime(predicted_workability["datetime"], format="%Y-%m-%d %H:%M:%S", errors='coerce')
 
+    # Output daily predicted workabilities.
+    #split_into_daily_subsets(2013, predicted_workability, download_folder / "yearly_subsetted_data")
+
+    # Regenerate visualization notebook
+    print("Regenerating notebook")
+    with open("report_visualizations.ipynb") as ff:
+        nb_in = nbformat.read(ff, nbformat.NO_CONVERT)
+        
+    ep = ExecutePreprocessor(timeout=600, kernel_name='python3')
+
+    ep.preprocess(nb_in)
+    
+    with open('report_visualizations.ipynb', 'w', encoding='utf-8') as f:
+        nbformat.write(nb_in, f)
+    print("Notebook fully regenerated")
+
     # Output graphs
     plot_workability_heatmaps_with_constraints(predicted_workability, save_directory=pathlib.Path("PlotOutputs/heatmaps"))
 
-    # Output daily predicted workabilities.
-    split_into_daily_subsets(2013, predicted_workability, download_folder / "yearly_subsetted_data")
-
 if __name__ == "__main__":
     download_and_process_all_data()
-
-# NOTE to self:
-# 6 values from 9am to 3pm amoung each dimensions.
-# Send lat/lons.
-# Send dates.
