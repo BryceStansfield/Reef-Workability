@@ -1,11 +1,8 @@
 cots_withWindWaveData.csv
 nopp-phase2*
 *.nc
-COTS INLOC Weather impacts.xlsx
-ReefCentroids.csv
 meta/*
 meta
-*.xlsx
 whacs/*
 whacs
 combined_visits_with_weather.csv
@@ -19,10 +16,8 @@ centroid_historical_whacs.csv
 *.docx
 .~lock*
 noaa_ww3*
-BPM_weather_failures*
 bpm_probs.csv
 centroid_historical_era5.csv
 predicted_workability_for_centroids.csv
 yearly_subsetted_data*
 *bpm*
-*BPM*

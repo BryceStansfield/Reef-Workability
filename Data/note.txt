@@ -1,2 +1,0 @@
-Some data comes from https://erddap.aoml.noaa.gov/hdb/erddap/griddap/WaveWatch_2025.html.
-Write a downloader for this.
